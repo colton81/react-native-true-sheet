@@ -405,6 +405,16 @@ export interface TrueSheetProps extends ViewProps {
   maxHeight?: number;
 
   /**
+   * Preferred sheet width.
+   * Only applies when pageSizing is false and in landscape mode.
+   * Uses system default when not provided or set to 0.
+   * @requires pageSizing to be false
+   * @platform ios 17+
+   */
+  preferredWidth?: number;
+
+
+  /**
    * Controls how the sheet adjusts its height for system insets (safe area).
    *
    * - `'automatic'`: Adds the bottom safe area inset to the sheet height,

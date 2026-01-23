@@ -58,9 +58,14 @@ using namespace facebook::react;
   BOOL _pendingLayoutUpdate;
   BOOL _didInitiallyPresent;
   BOOL _dismissedByNavigation;
+  CGFloat _preferredWidth;
   BOOL _pendingNavigationRepresent;
   BOOL _pendingMountEvent;
   RNScreensEventObserver *_screensEventObserver;
+  
+#pragma mark Landscape Sheet style
+  UIView *_sheetSourceAnchorView;
+  NSLayoutConstraint *_sheetSourceAnchorWidthConstraint;
 }
 
 #pragma mark - Initialization
@@ -75,7 +80,6 @@ using namespace facebook::react;
 
     _controller = [[TrueSheetViewController alloc] init];
     _controller.delegate = self;
-
     _touchHandler = [[RCTSurfaceTouchHandler alloc] init];
     _containerView = nil;
     _snapshotView = nil;
@@ -84,7 +88,7 @@ using namespace facebook::react;
     _initialDetentAnimated = YES;
     _scrollable = NO;
     _isSheetUpdatePending = NO;
-
+    _sheetSourceAnchorView = nil;
     _screensEventObserver = [[RNScreensEventObserver alloc] init];
     _screensEventObserver.delegate = self;
   }
@@ -158,6 +162,8 @@ using namespace facebook::react;
 
   const auto &newProps = *std::static_pointer_cast<TrueSheetViewProps const>(props);
 
+#pragma mark: Landscape Sheet style
+  _preferredWidth = (CGFloat)newProps.preferredWidth;   // <- prop from JS
   // Detents (-1 represents "auto")
   NSMutableArray *detents = [NSMutableArray new];
   for (const auto &detent : newProps.detents) {
@@ -191,6 +197,10 @@ using namespace facebook::react;
     _controller.maxHeight = @(newProps.maxHeight);
   }
 
+  // Preferred width (iPad form/page sheets, compact-height edge attachment)
+  CGFloat preferredWidth = static_cast<CGFloat>(newProps.preferredWidth);
+  _controller.preferredContentSize =
+    CGSizeMake(preferredWidth, _controller.preferredContentSize.height);
   _controller.grabber = newProps.grabber;
 
   // Grabber options - check if any non-default values are set
@@ -404,6 +414,7 @@ using namespace facebook::react;
 
 #pragma mark - TurboModule Methods
 
+
 - (void)presentAtIndex:(NSInteger)index
               animated:(BOOL)animated
             completion:(nullable TrueSheetCompletionBlock)completion {
@@ -413,7 +424,9 @@ using namespace facebook::react;
   }
 
   if (_controller.isPresented) {
-    RCTLogWarn(@"TrueSheet: sheet is already presented. Use resize() to change detent.");
+    [_controller.sheetPresentationController animateChanges:^{
+      [self->_controller resizeToDetentIndex:index];
+    }];
     if (completion) {
       completion(YES, nil);
     }
@@ -430,12 +443,34 @@ using namespace facebook::react;
     }
     return;
   }
+    if (_preferredWidth > 0){
+    _controller.modalPresentationStyle = UIModalPresentationFormSheet;
+  }
+    CGFloat preferredWidth = _preferredWidth > 0 ? _preferredWidth : 0;
+  if (preferredWidth > 0) {
+    _controller.modalPresentationStyle = UIModalPresentationFormSheet;
+    CGFloat contentHeight = _controller.contentHeight ? [_controller.contentHeight floatValue] : 400.0;
+    _controller.preferredContentSize = CGSizeMake(preferredWidth, contentHeight);
+  }
+   UISheetPresentationController *sheet = _controller.sheetPresentationController;
+  if (sheet) {
+    sheet.widthFollowsPreferredContentSizeWhenEdgeAttached = YES;
+    // Set sourceView BEFORE detents
+    if (preferredWidth > 0) {
+      UIView *anchor = [self ensureSheetSourceAnchorInPresenter:presentingViewController
+                                                 preferredWidth:preferredWidth];
+      sheet.sourceView = anchor;
+    }
+    sheet.prefersGrabberVisible = _controller.grabber;
+    sheet.prefersScrollingExpandsWhenScrolledToEdge = _controller.draggable;
+    if (_controller.cornerRadius) {
+      sheet.preferredCornerRadius = [_controller.cornerRadius floatValue];
+    }
 
+  }
   [_controller setupSheetProps];
   [_controller setupSheetDetents];
   [_controller setupActiveDetentWithIndex:index];
-
-  [_screensEventObserver capturePresenterScreenFromView:self];
 
   [presentingViewController presentViewController:_controller
                                          animated:animated
@@ -638,6 +673,49 @@ using namespace facebook::react;
   }
 }
 
+#pragma mark - Landscape Sheet Style
+- (UIView *)ensureSheetSourceAnchorInPresenter:(UIViewController *)presenter preferredWidth:(CGFloat)preferredWidth {
+  // If anchor already exists in the correct superview, just update width constraint
+  if (_sheetSourceAnchorView && _sheetSourceAnchorView.superview == presenter.view) {
+    if (_sheetSourceAnchorWidthConstraint) {
+      _sheetSourceAnchorWidthConstraint.constant = preferredWidth;
+      [presenter.view layoutIfNeeded];
+    }
+    return _sheetSourceAnchorView;
+  }
+
+  // Only create new anchor if it doesn't exist
+  if (_sheetSourceAnchorView) {
+    [_sheetSourceAnchorView removeFromSuperview];
+  }
+
+  UIView *anchor = [UIView new];
+  anchor.translatesAutoresizingMaskIntoConstraints = NO;
+  anchor.backgroundColor = [UIColor clearColor];
+  anchor.userInteractionEnabled = NO;
+  
+  [presenter.view addSubview:anchor];
+  
+  NSLayoutConstraint *trailing = [anchor.trailingAnchor constraintEqualToAnchor:presenter.view.leadingAnchor];
+  NSLayoutConstraint *bottom = [anchor.bottomAnchor constraintEqualToAnchor:presenter.view.bottomAnchor];
+  NSLayoutConstraint *width = [anchor.widthAnchor constraintEqualToConstant:preferredWidth];
+  NSLayoutConstraint *height = [anchor.heightAnchor constraintEqualToConstant:10.0];
+  
+  [NSLayoutConstraint activateConstraints:@[trailing, bottom, width, height]];
+  
+  [presenter.view setNeedsLayout];
+  [presenter.view layoutIfNeeded];
+  
+  _sheetSourceAnchorView = anchor;
+  _sheetSourceAnchorWidthConstraint = width;
+  
+  return anchor;
+}
+- (void)cleanupSheetSourceAnchor {
+  [_sheetSourceAnchorView removeFromSuperview];
+  _sheetSourceAnchorView = nil;
+  _sheetSourceAnchorWidthConstraint = nil;
+}
 #pragma mark - Private Helpers
 
 - (UIViewController *)findPresentingViewController {

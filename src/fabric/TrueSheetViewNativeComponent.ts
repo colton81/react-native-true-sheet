@@ -70,6 +70,7 @@ export interface NativeProps extends ViewProps {
   scrollable?: WithDefault<boolean, false>;
   scrollableOptions?: ScrollableOptionsType;
   pageSizing?: WithDefault<boolean, true>;
+  preferredWidth?: WithDefault<Double, 0>;
 
   // Event handlers
   onMount?: DirectEventHandler<null>;

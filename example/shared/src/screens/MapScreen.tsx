@@ -90,16 +90,18 @@ const MapScreenInner = ({
     <View style={styles.container}>
       <MapComponent style={styles.map} />
       <AnimatedButton
-        activeOpacity={0.6}
+        activeOpacity={1.6}
         style={[styles.floatingControl, floatingControlStyles]}
         onPress={() => sheetRef.current?.present(1)}
       />
       <ReanimatedTrueSheet
         name="main"
-        detents={[minHeight / height, 'auto', 1]}
+        detents={[minHeight / height, 0.5]}
         ref={sheetRef}
         initialDetentIndex={1}
         dimmedDetentIndex={1}
+        pageSizing={false}
+        preferredWidth={300}
         dismissible={false}
         style={styles.content}
         backgroundColor={Platform.select({ ios: undefined, default: DARK })}

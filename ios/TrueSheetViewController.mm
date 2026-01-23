@@ -719,6 +719,7 @@
   }
 
   sheet.prefersEdgeAttachedInCompactHeight = YES;
+  sheet.widthFollowsPreferredContentSizeWhenEdgeAttached = YES;
   sheet.prefersScrollingExpandsWhenScrolledToEdge = self.draggable;
 
   if (self.cornerRadius) {

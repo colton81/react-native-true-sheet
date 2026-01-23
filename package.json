@@ -46,7 +46,7 @@
   ],
   "scripts": {
     "bare": "yarn workspace @example/bare",
-    "expo": "yarn workspace @example/expo",
+    "expo": "yarn workspace @example/expo start",
     "docs": "yarn workspace docs",
     "test": "jest",
     "typecheck": "tsc",
