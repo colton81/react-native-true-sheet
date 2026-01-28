@@ -27,16 +27,9 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
-import {
-  BottomSheetContext,
-  getPresent,
-  getDismiss,
-  getResize,
-  getDismissAll,
-} from './TrueSheetProvider.web';
+import { BottomSheetContext, type TrueSheetRefMethods } from './TrueSheetProvider.web';
 import type {
   TrueSheetProps,
-  TrueSheetRef,
   DetentChangeEvent,
   DidBlurEvent,
   DidDismissEvent,
@@ -84,7 +77,7 @@ const renderSlot = (slot: TrueSheetProps['header'] | TrueSheetProps['footer']) =
   return createElement(slot);
 };
 
-const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref) => {
+const TrueSheetComponent = forwardRef<TrueSheetRefMethods, TrueSheetProps>((props, ref) => {
   const {
     name,
     detents = [0.5, 1],
@@ -274,6 +267,12 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
       }
 
       if (isPresenting.current) {
+        // Fire onMount on first present (before willPresent, matching native)
+        if (!isMounted) {
+          setIsMounted(true);
+          onMount?.({ nativeEvent: null } as MountEvent);
+        }
+
         onWillPresent?.({
           nativeEvent: {
             index: toIndex,
@@ -292,13 +291,17 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
       }
 
       if (toIndex === -1 && !isPresenting.current) {
-        // Will be handled as blur if the sheet doesn't actually dismiss
         isMinimized.current = true;
         onWillBlur?.({ nativeEvent: null } as WillBlurEvent);
-        onWillDismiss?.({ nativeEvent: null } as WillDismissEvent);
+
+        // Only fire willDismiss if this is an actual dismiss (not being backgrounded by another sheet)
+        const sheetsAbove = bottomSheetContext?.getSheetsAbove(sheetName) ?? [];
+        if (sheetsAbove.length === 0) {
+          onWillDismiss?.({ nativeEvent: null } as WillDismissEvent);
+        }
       }
     },
-    [detents, animatedPosition]
+    [detents, animatedPosition, sheetName, bottomSheetContext, isMounted, onMount]
   );
 
   const backdropComponent = useCallback(
@@ -306,13 +309,21 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
       if (!dimmed) {
         return null;
       }
+
+      // When not dismissible, collapse to below dimmed index instead of dismissing
+      const pressBehavior = dismissible
+        ? 'close'
+        : dimmedDetentIndex > 0
+          ? dimmedDetentIndex - 1
+          : 'none';
+
       return (
         <BottomSheetBackdrop
           {...backdropProps}
           opacity={0.5}
           appearsOnIndex={dimmedDetentIndex}
           disappearsOnIndex={dimmedDetentIndex - 1}
-          pressBehavior={dismissible ? 'close' : 'none'}
+          pressBehavior={pressBehavior}
         />
       );
     },
@@ -362,19 +373,7 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
   // For scrollable, we render the child directly
   const ContainerComponent = scrollable ? Fragment : BottomSheetView;
 
-  const dismissInternal = useCallback(() => {
-    return new Promise<void>((resolve) => {
-      dismissResolver.current = resolve;
-      isDismissing.current = true;
-      if (isNonModal) {
-        bottomSheetRef.current?.close();
-      } else {
-        bottomSheetModalRef.current?.dismiss();
-      }
-    });
-  }, [isNonModal]);
-
-  const sheetMethodsRef = useRef<TrueSheetRef & { dismissDirect?: () => Promise<void> }>({
+  const sheetMethodsRef = useRef<TrueSheetRefMethods>({
     present: (index = 0) => {
       return new Promise<void>((resolve) => {
         presentResolver.current = resolve;
@@ -390,20 +389,29 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
     },
     dismiss: () => {
       return new Promise<void>((resolve) => {
-        // iOS-like behavior: dismiss sheets above, but not itself.
-        // See: https://developer.apple.com/documentation/uikit/uiviewcontroller/1621505-dismiss
+        dismissResolver.current = resolve;
+        isDismissing.current = true;
+        if (isNonModal) {
+          bottomSheetRef.current?.close();
+        } else {
+          bottomSheetModalRef.current?.dismiss();
+        }
+      });
+    },
+    dismissStack: () => {
+      return new Promise<void>((resolve) => {
+        // Dismiss only sheets above, keeping this sheet presented
         const sheetsAbove = bottomSheetContext?.getSheetsAbove(sheetName) ?? [];
         const immediateChild = sheetsAbove[sheetsAbove.length - 1];
         if (immediateChild) {
           // Dismiss the immediate child - gorhom will dismiss all sheets above it
-          bottomSheetContext?.dismissDirect(immediateChild).then(resolve);
+          bottomSheetContext?.dismiss(immediateChild).then(resolve);
           return;
         }
 
-        dismissInternal().then(resolve);
+        resolve();
       });
     },
-    dismissDirect: () => dismissInternal(),
     resize: async (index: number) => {
       if (isNonModal) {
         bottomSheetRef.current?.snapToIndex(index);
@@ -429,14 +437,6 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
       sheetMethodsRef.current.present(initialDetentIndexRef.current);
     }
   }, []);
-
-  // Handle mount event after first render
-  useEffect(() => {
-    if (!isMounted) {
-      setIsMounted(true);
-      onMount?.({ nativeEvent: null } as MountEvent);
-    }
-  }, [isMounted, onMount]);
 
   const sheetContent = (
     <ContainerComponent>
@@ -494,45 +494,37 @@ const TrueSheetComponent = forwardRef<TrueSheetRef, TrueSheetProps>((props, ref)
   );
 });
 
+const STATIC_METHOD_ERROR =
+  'Static methods are not supported on web. Use the useTrueSheet() hook instead.';
+
 interface TrueSheetStatic {
   present: (name: string, index?: number) => Promise<void>;
   dismiss: (name: string) => Promise<void>;
+  dismissStack: (name: string) => Promise<void>;
   resize: (name: string, index: number) => Promise<void>;
   dismissAll: () => Promise<void>;
 }
 
 export const TrueSheet = TrueSheetComponent as typeof TrueSheetComponent & TrueSheetStatic;
 
-TrueSheet.present = async (name: string, index?: number) => {
-  const present = getPresent();
-  if (!present) {
-    throw new Error('TrueSheet.present(): TrueSheetProvider is not mounted.');
-  }
-  return present(name, index);
+TrueSheet.present = async () => {
+  throw new Error(STATIC_METHOD_ERROR);
 };
 
-TrueSheet.dismiss = async (name: string) => {
-  const dismiss = getDismiss();
-  if (!dismiss) {
-    throw new Error('TrueSheet.dismiss(): TrueSheetProvider is not mounted.');
-  }
-  return dismiss(name);
+TrueSheet.dismiss = async () => {
+  throw new Error(STATIC_METHOD_ERROR);
 };
 
-TrueSheet.resize = async (name: string, index: number) => {
-  const resize = getResize();
-  if (!resize) {
-    throw new Error('TrueSheet.resize(): TrueSheetProvider is not mounted.');
-  }
-  return resize(name, index);
+TrueSheet.dismissStack = async () => {
+  throw new Error(STATIC_METHOD_ERROR);
+};
+
+TrueSheet.resize = async () => {
+  throw new Error(STATIC_METHOD_ERROR);
 };
 
 TrueSheet.dismissAll = async () => {
-  const dismissAll = getDismissAll();
-  if (!dismissAll) {
-    throw new Error('TrueSheet.dismissAll(): TrueSheetProvider is not mounted.');
-  }
-  return dismissAll();
+  throw new Error(STATIC_METHOD_ERROR);
 };
 
 const styles = StyleSheet.create({

@@ -115,7 +115,7 @@ using namespace facebook::react;
     UIViewController *vc = [self findPresentingViewController];
 
     // Only present if the view controller is in the same window and not being dismissed
-    if (vc && vc.view.window == self.window && !vc.isBeingDismissed) {
+    if (vc && vc.view.window == self.window && !_controller.isBeingDismissed) {
       _didInitiallyPresent = YES;
       [self presentAtIndex:_initialDetentIndex animated:_initialDetentAnimated completion:nil];
     } else {
@@ -272,6 +272,12 @@ using namespace facebook::react;
 
 - (void)updateState:(const State::Shared &)state oldState:(const State::Shared &)oldState {
   _state = std::static_pointer_cast<TrueSheetViewShadowNode::ConcreteState const>(state);
+
+  // Initialize with _controller size to set initial width
+  if (_controller) {
+    [self updateStateWithSize:_controller.view.frame.size];
+  }
+
   [_screensEventObserver startObservingWithState:_state.get()->getData()];
 }
 
@@ -418,20 +424,16 @@ using namespace facebook::react;
 - (void)presentAtIndex:(NSInteger)index
               animated:(BOOL)animated
             completion:(nullable TrueSheetCompletionBlock)completion {
-  if (_controller.isBeingPresented) {
-    RCTLogWarn(@"TrueSheet: sheet is being presented. Wait for it to transition before presenting again.");
-    return;
-  }
-
-  if (_controller.isPresented) {
-    [_controller.sheetPresentationController animateChanges:^{
-      [self->_controller resizeToDetentIndex:index];
-    }];
+  if (_controller.isBeingPresented || _controller.isPresented) {
+    RCTLogWarn(@"TrueSheet: sheet is already presented. Use resize() to change detent.");
     if (completion) {
       completion(YES, nil);
     }
     return;
   }
+
+  // Reset navigation dismiss flag when presenting (handles view recycling edge cases)
+  _dismissedByNavigation = NO;
 
   UIViewController *presentingViewController = [self findPresentingViewController];
   if (!presentingViewController) {
@@ -481,27 +483,6 @@ using namespace facebook::react;
                                        }];
 }
 
-- (void)dismissAnimated:(BOOL)animated completion:(nullable TrueSheetCompletionBlock)completion {
-  if (_controller.isBeingDismissed) {
-    RCTLogWarn(@"TrueSheet: sheet is being dismissed. No need to dismiss it again.");
-    return;
-  }
-
-  if (!_controller.isPresented) {
-    if (completion) {
-      completion(YES, nil);
-    }
-    return;
-  }
-
-  [_controller dismissViewControllerAnimated:animated
-                                  completion:^{
-                                    if (completion) {
-                                      completion(YES, nil);
-                                    }
-                                  }];
-}
-
 - (void)resizeToIndex:(NSInteger)index completion:(nullable TrueSheetCompletionBlock)completion {
   if (!_controller.isPresented) {
     RCTLogWarn(@"TrueSheet: Cannot resize. Sheet is not presented.");
@@ -524,15 +505,19 @@ using namespace facebook::react;
   return _controller;
 }
 
-- (void)dismissAllAnimated:(BOOL)animated completion:(nullable TrueSheetCompletionBlock)completion {
-  if (!_controller.isPresented) {
+- (void)emitDismissedPosition {
+  [self viewControllerDidChangePosition:-1 position:_controller.screenHeight detent:0 realtime:NO];
+}
+
+- (void)dismissAnimated:(BOOL)animated completion:(nullable TrueSheetCompletionBlock)completion {
+  if (_controller.isBeingDismissed || !_controller.isPresented) {
+    RCTLogWarn(@"TrueSheet: sheet is already dismissed. No need to dismiss it again.");
+
     if (completion) {
       completion(YES, nil);
     }
     return;
   }
-
-  [self viewControllerDidChangePosition:-1 position:_controller.screenHeight detent:0 realtime:NO];
 
   // Dismiss from the presenting view controller to dismiss this sheet and all its children
   UIViewController *presenter = _controller.presentingViewController;
@@ -542,6 +527,33 @@ using namespace facebook::react;
                                     completion(YES, nil);
                                   }
                                 }];
+}
+
+- (void)dismissStackAnimated:(BOOL)animated completion:(nullable TrueSheetCompletionBlock)completion {
+  if (_controller.isBeingDismissed || !_controller.isPresented) {
+    RCTLogWarn(@"TrueSheet: sheet is already dismissed. No need to dismiss it again.");
+
+    if (completion) {
+      completion(YES, nil);
+    }
+    return;
+  }
+
+  // Only dismiss presented children, not this sheet itself
+  if (!_controller.presentedViewController) {
+    if (completion) {
+      completion(YES, nil);
+    }
+    return;
+  }
+
+  // Calling dismiss on _controller dismisses all VCs presented on top of it, but keeps _controller presented
+  [_controller dismissViewControllerAnimated:animated
+                                  completion:^{
+                                    if (completion) {
+                                      completion(YES, nil);
+                                    }
+                                  }];
 }
 
 #pragma mark - TrueSheetContainerViewDelegate
@@ -662,7 +674,7 @@ using namespace facebook::react;
 - (void)presenterScreenWillDisappear {
   if (_controller.isPresented && !_controller.isBeingDismissed) {
     _dismissedByNavigation = YES;
-    [self dismissAllAnimated:YES completion:nil];
+    [self dismissAnimated:YES completion:nil];
   }
 }
 

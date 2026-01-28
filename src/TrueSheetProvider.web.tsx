@@ -1,29 +1,23 @@
 import { createContext, useContext, useRef, type ReactNode, type RefObject } from 'react';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import type { TrueSheetContextMethods, TrueSheetRef } from './TrueSheet.types';
 
-interface BottomSheetContextValue extends TrueSheetContextMethods {
-  register: (name: string, methods: RefObject<TrueSheetRef>) => void;
+import type { TrueSheetStaticMethods } from './TrueSheetProvider';
+import type { TrueSheet } from './TrueSheet';
+
+export type TrueSheetRefMethods = Pick<
+  TrueSheet,
+  'present' | 'dismiss' | 'resize' | 'dismissStack'
+>;
+
+interface BottomSheetContextValue extends TrueSheetStaticMethods {
+  register: (name: string, methods: RefObject<TrueSheetRefMethods>) => void;
   unregister: (name: string) => void;
   pushToStack: (name: string) => void;
   removeFromStack: (name: string) => void;
   getSheetsAbove: (name: string) => string[];
-  dismissDirect: (name: string) => Promise<void>;
-  dismissAll: () => Promise<void>;
 }
 
 export const BottomSheetContext = createContext<BottomSheetContextValue | null>(null);
-
-// Module-level references for static methods
-let presentRef: ((name: string, index?: number) => Promise<void>) | null = null;
-let dismissRef: ((name: string) => Promise<void>) | null = null;
-let resizeRef: ((name: string, index: number) => Promise<void>) | null = null;
-let dismissAllRef: (() => Promise<void>) | null = null;
-
-export const getPresent = () => presentRef;
-export const getDismiss = () => dismissRef;
-export const getResize = () => resizeRef;
-export const getDismissAll = () => dismissAllRef;
 
 export interface TrueSheetProviderProps {
   children: ReactNode;
@@ -34,10 +28,10 @@ export interface TrueSheetProviderProps {
  * Required to wrap your app for sheet management via useTrueSheet hook.
  */
 export function TrueSheetProvider({ children }: TrueSheetProviderProps) {
-  const sheetsRef = useRef<Map<string, RefObject<TrueSheetRef>>>(new Map());
+  const sheetsRef = useRef<Map<string, RefObject<TrueSheetRefMethods>>>(new Map());
   const presentedStackRef = useRef<string[]>([]);
 
-  const register = (name: string, methods: RefObject<TrueSheetRef>) => {
+  const register = (name: string, methods: RefObject<TrueSheetRefMethods>) => {
     sheetsRef.current.set(name, methods);
   };
 
@@ -88,17 +82,13 @@ export function TrueSheetProvider({ children }: TrueSheetProviderProps) {
     return sheet.current.dismiss();
   };
 
-  /**
-   * Dismisses a sheet directly without checking for sheets above.
-   * Used internally when batch-dismissing stacked sheets.
-   */
-  const dismissDirect = async (name: string) => {
+  const dismissStack = async (name: string) => {
     const sheet = sheetsRef.current.get(name);
     if (!sheet?.current) {
       console.warn(`TrueSheet: Could not find sheet with name "${name}"`);
       return;
     }
-    return (sheet.current as any).dismissDirect?.();
+    return sheet.current.dismissStack();
   };
 
   const resize = async (name: string, index: number) => {
@@ -113,14 +103,8 @@ export function TrueSheetProvider({ children }: TrueSheetProviderProps) {
   const dismissAll = async () => {
     const rootSheet = presentedStackRef.current[0];
     if (!rootSheet) return;
-    return dismissDirect(rootSheet);
+    return dismiss(rootSheet);
   };
-
-  // Set module-level refs for static access
-  presentRef = present;
-  dismissRef = dismiss;
-  resizeRef = resize;
-  dismissAllRef = dismissAll;
 
   return (
     <BottomSheetContext.Provider
@@ -130,11 +114,11 @@ export function TrueSheetProvider({ children }: TrueSheetProviderProps) {
         pushToStack,
         removeFromStack,
         getSheetsAbove,
-        dismissDirect,
-        dismissAll,
         present,
         dismiss,
+        dismissStack,
         resize,
+        dismissAll,
       }}
     >
       <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
@@ -142,11 +126,7 @@ export function TrueSheetProvider({ children }: TrueSheetProviderProps) {
   );
 }
 
-/**
- * Hook to control TrueSheet instances by name.
- * On web, this uses the TrueSheetContext from TrueSheetProvider.
- */
-export function useTrueSheet(): TrueSheetContextMethods {
+export function useTrueSheet(): TrueSheetStaticMethods {
   const context = useContext(BottomSheetContext);
 
   if (!context) {
@@ -156,6 +136,7 @@ export function useTrueSheet(): TrueSheetContextMethods {
   return {
     present: context.present,
     dismiss: context.dismiss,
+    dismissStack: context.dismissStack,
     resize: context.resize,
     dismissAll: context.dismissAll,
   };

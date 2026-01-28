@@ -1,7 +1,8 @@
 import React, { createElement, isValidElement, type ReactNode } from 'react';
 import { View } from 'react-native';
 
-import type { TrueSheetProps, TrueSheetRef, TrueSheetContextMethods } from '../TrueSheet.types';
+import type { TrueSheetProps } from '../TrueSheet.types';
+import type { TrueSheetStaticMethods } from '../TrueSheetProvider';
 
 interface TrueSheetState {
   shouldRenderNativeView: boolean;
@@ -11,13 +12,11 @@ interface TrueSheetState {
  * Mock TrueSheet component for testing.
  * Import from '@lodev09/react-native-true-sheet/mock' in your test setup.
  */
-export class TrueSheet
-  extends React.Component<TrueSheetProps, TrueSheetState>
-  implements TrueSheetRef
-{
+export class TrueSheet extends React.Component<TrueSheetProps, TrueSheetState> {
   static instances: Record<string, TrueSheet> = {};
 
   static dismiss = jest.fn((_name: string, _animated?: boolean) => Promise.resolve());
+  static dismissStack = jest.fn((_name: string, _animated?: boolean) => Promise.resolve());
   static present = jest.fn((_name: string, _index?: number, _animated?: boolean) =>
     Promise.resolve()
   );
@@ -25,6 +24,7 @@ export class TrueSheet
   static dismissAll = jest.fn((_animated?: boolean) => Promise.resolve());
 
   dismiss = jest.fn((_animated?: boolean) => Promise.resolve());
+  dismissStack = jest.fn((_animated?: boolean) => Promise.resolve());
   present = jest.fn((_index?: number, _animated?: boolean) => Promise.resolve());
   resize = jest.fn((_index: number) => Promise.resolve());
 
@@ -70,10 +70,11 @@ export function TrueSheetProvider({ children }: { children: React.ReactNode }) {
 /**
  * Mock useTrueSheet hook for testing.
  */
-export function useTrueSheet(): TrueSheetContextMethods {
+export function useTrueSheet(): TrueSheetStaticMethods {
   return {
     present: TrueSheet.present,
     dismiss: TrueSheet.dismiss,
+    dismissStack: TrueSheet.dismissStack,
     resize: TrueSheet.resize,
     dismissAll: TrueSheet.dismissAll,
   };

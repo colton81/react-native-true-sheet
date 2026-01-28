@@ -25,6 +25,7 @@
 
 @implementation TrueSheetViewController {
   CGFloat _lastPosition;
+  CGFloat _lastWidth;
   NSInteger _pendingDetentIndex;
   BOOL _pendingContentSizeChange;
   BOOL _pendingDetentsChange;
@@ -211,6 +212,7 @@
     dispatch_async(dispatch_get_main_queue(), ^{
       NSInteger index = [self currentDetentIndex];
       CGFloat detent = [self detentValueForIndex:index];
+      [self.delegate viewControllerDidChangeSize:self.view.frame.size];
       [self.delegate viewControllerDidPresentAtIndex:index position:self.currentPosition detent:detent];
       [self.delegate viewControllerDidFocus];
 
@@ -222,12 +224,8 @@
   }
 }
 
-- (BOOL)isDismissing {
-  return self.presentingViewController == nil || self.isBeingDismissed;
-}
-
 - (void)emitWillDismissEvents {
-  if (self.isDismissing && !_isWillDismissEmitted) {
+  if (self.isBeingDismissed && !_isWillDismissEmitted) {
     _isWillDismissEmitted = YES;
 
     [self.delegate viewControllerWillBlur];
@@ -237,7 +235,7 @@
 }
 
 - (void)emitDidDismissEvents {
-  if (self.isDismissing) {
+  if (self.isBeingDismissed) {
     _isPresented = NO;
     _isWillDismissEmitted = NO;
 
@@ -292,7 +290,12 @@
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
 
-  [self.delegate viewControllerDidChangeSize:self.view.frame.size];
+  // Update state on rotation (width change)
+  CGFloat width = self.view.frame.size.width;
+  if (_lastWidth != width) {
+    _lastWidth = width;
+    [self.delegate viewControllerDidChangeSize:self.view.frame.size];
+  }
 
   if (_pendingDetentIndex >= 0) {
     NSInteger pendingIndex = _pendingDetentIndex;
@@ -301,6 +304,7 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
       [self storeResolvedPositionForIndex:pendingIndex];
       CGFloat detent = [self detentValueForIndex:pendingIndex];
+      [self.delegate viewControllerDidChangeSize:self.view.frame.size];
       [self.delegate viewControllerDidChangeDetent:pendingIndex position:self.currentPosition detent:detent];
       [self emitChangePositionDelegateWithPosition:self.currentPosition realtime:NO debug:@"pending detent change"];
     });
@@ -398,12 +402,12 @@
   CGRect dismissedFrame = CGRectMake(0, self.screenHeight, 0, 0);
   CGRect presentedFrame = CGRectMake(0, self.currentPosition, 0, 0);
 
-  _transitionFakeView.frame = self.isDismissing ? presentedFrame : dismissedFrame;
+  _transitionFakeView.frame = self.isBeingDismissed ? presentedFrame : dismissedFrame;
   [self storeResolvedPositionForIndex:self.currentDetentIndex];
 
   auto animation = ^(id<UIViewControllerTransitionCoordinatorContext> _Nonnull context) {
     [[context containerView] addSubview:self->_transitionFakeView];
-    self->_transitionFakeView.frame = self.isDismissing ? dismissedFrame : presentedFrame;
+    self->_transitionFakeView.frame = self.isBeingDismissed ? dismissedFrame : presentedFrame;
 
     self->_transitioningTimer = [CADisplayLink displayLinkWithTarget:self selector:@selector(handleTransitionTracker)];
     [self->_transitioningTimer addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
@@ -740,6 +744,7 @@
     NSInteger index = self.currentDetentIndex;
     if (index >= 0) {
       CGFloat detent = [self detentValueForIndex:index];
+      [self.delegate viewControllerDidChangeSize:self.view.frame.size];
       [self.delegate viewControllerDidChangeDetent:index position:self.currentPosition detent:detent];
     }
   });

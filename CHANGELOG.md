@@ -2,13 +2,41 @@
 
 ## Unreleased
 
+### 🐛 Bug fixes
+
+- **iOS**: Fixed content clipping when sheet content changes dynamically by clearing stale ScrollView reference. ([#482](https://github.com/lodev09/react-native-true-sheet/pull/482) by [@sbs44](https://github.com/sbs44))
+
+## 3.8.1
+
+### 📖 Documentation
+
+- Added web limitation note for `react-native-screens` detection with `useFocusEffect` workaround. ([#480](https://github.com/lodev09/react-native-true-sheet/pull/480) by [@lodev09](https://github.com/lodev09))
+
+### 🐛 Bug fixes
+
+- **Web**: Collapse to lowest detent when not dismissible, matching native behavior. ([#479](https://github.com/lodev09/react-native-true-sheet/pull/479) by [@lodev09](https://github.com/lodev09))
+- **Web**: Fixed event firing order and conditions to match native. ([#478](https://github.com/lodev09/react-native-true-sheet/pull/478) by [@lodev09](https://github.com/lodev09))
+
+## 3.8.0
+
+### ⚠️ Breaking changes
+
+- **Dismiss Behavior**: `dismiss()` now dismisses the sheet and all sheets presented on top of it. Previously, calling `dismiss()` on a sheet with children would only either dismiss the current sheet if it had no children or only the child sheets presented on top of it, keeping the current sheet open. Now it performs a cascade dismiss of the entire stack.
+Use the `dismissStack()` method if you need the old behavior of dismissing only child sheets.
+
+- **Remove Static Methods on Web**: Static methods (`TrueSheet.present()`, `TrueSheet.dismiss()`, etc.) are no longer supported on web. Use the `useTrueSheet()` hook instead.
+
 ### 🎉 New features
 
+- Added `dismissStack()` instance and static method to dismiss only sheets presented on top of the current sheet, keeping the current sheet presented. ([#452](https://github.com/lodev09/react-native-true-sheet/pull/452), [#470](https://github.com/lodev09/react-native-true-sheet/pull/470) by [@obi-owner](https://github.com/obi-owner), [@lodev09](https://github.com/lodev09))
 - Added `scrollableOptions` prop with keyboard scroll handling for ScrollViews. ([#442](https://github.com/lodev09/react-native-true-sheet/pull/442) by [@lodev09](https://github.com/lodev09))
 - Added bottom inset to ScrollView when `insetAdjustment` is `automatic`. ([#430](https://github.com/lodev09/react-native-true-sheet/pull/430) by [@lodev09](https://github.com/lodev09))
 
 ### 🐛 Bug fixes
 
+- **iOS**: Fixed sheet not auto-dismissing when nested stack is removed. ([#472](https://github.com/lodev09/react-native-true-sheet/pull/472) by [@lodev09](https://github.com/lodev09))
+- Fixed `pop`, `popTo`, `popToTop` navigation actions not dismissing sheets properly. ([#471](https://github.com/lodev09/react-native-true-sheet/pull/471) by [@lodev09](https://github.com/lodev09))
+- **iOS**: Fixed scroll position jumping when nested sheet is dismissed with inverted FlatList. ([#468](https://github.com/lodev09/react-native-true-sheet/pull/468) by [@lucasklaassen](https://github.com/lucasklaassen))
 - **Android**: Fixed present promise not resolving on resize. ([c3495500](https://github.com/lodev09/react-native-true-sheet/commit/c3495500) by [@lodev09](https://github.com/lodev09))
 - **iOS**: Fixed scroll view pinning to respect content view padding/margin. ([#429](https://github.com/lodev09/react-native-true-sheet/pull/429), [#446](https://github.com/lodev09/react-native-true-sheet/pull/446) by [@lodev09](https://github.com/lodev09))
 - **iOS**: Fixed footer not translating back when keyboard hides via ScrollView. ([#424](https://github.com/lodev09/react-native-true-sheet/pull/424) by [@lodev09](https://github.com/lodev09))
@@ -20,7 +48,9 @@
 
 ### 📖 Documentation
 
+- Added overlays guide for displaying modals/dialogs on top of sheets. ([#474](https://github.com/lodev09/react-native-true-sheet/pull/474) by [@lodev09](https://github.com/lodev09))
 - Added `transformIgnorePatterns` to Jest setup guide. ([#458](https://github.com/lodev09/react-native-true-sheet/pull/458) by [@lodev09](https://github.com/lodev09))
+- Added troubleshooting docs for deep-linking modals. ([#2d111c4f](https://github.com/lodev09/react-native-true-sheet/commit/2d111c4f777a3a50e75d0894dbaa5852914f5962) by [@lodev09](https://github.com/lodev09))
 
 ### 💡 Others
 

@@ -1,6 +1,6 @@
 import { forwardRef, useRef, useState, type Ref, useImperativeHandle } from 'react';
 import { StyleSheet } from 'react-native';
-import { TrueSheet, type TrueSheetProps } from '@lodev09/react-native-true-sheet';
+import { TrueSheet, useTrueSheet, type TrueSheetProps } from '@lodev09/react-native-true-sheet';
 
 import { BLUE, DARK, DARK_BLUE, FOOTER_HEIGHT, GAP, SPACING, times } from '../../utils';
 import { DemoContent } from '../DemoContent';
@@ -21,6 +21,8 @@ export const BasicSheet = forwardRef((props: BasicSheetProps, ref: Ref<TrueSheet
   const childSheet = useRef<TrueSheet>(null);
   const [contentCount, setContentCount] = useState(0);
   const [detentIndex, setDetentIndex] = useState(0);
+
+  const { dismissAll, dismissStack } = useTrueSheet();
 
   const resize = async (index: number) => {
     await sheetRef.current?.resize(index);
@@ -108,10 +110,11 @@ export const BasicSheet = forwardRef((props: BasicSheetProps, ref: Ref<TrueSheet
       ))}
       <Button text={`Add Content (${contentCount})`} onPress={addContent} />
       {contentCount > 0 && <Button text="Remove Content" onPress={removeContent} />}
-      <Spacer />
-      <Button text="Present Large" onPress={() => resize(2)} />
-      <Button text="Present 80%" onPress={() => resize(1)} />
-      <Button text="Present Auto" onPress={() => resize(0)} />
+      <ButtonGroup>
+        <Button text="Large" onPress={() => resize(2)} />
+        <Button text="80%" onPress={() => resize(1)} />
+        <Button text="Auto" onPress={() => resize(0)} />
+      </ButtonGroup>
       <Spacer />
       <ButtonGroup>
         <Button text="Child Sheet" onPress={presentChild} />
@@ -121,6 +124,10 @@ export const BasicSheet = forwardRef((props: BasicSheetProps, ref: Ref<TrueSheet
         {onNavigateToModal && <Button text="Modal" onPress={onNavigateToModal} />}
         {onNavigateToTest && <Button text="Test Screen" onPress={onNavigateToTest} />}
       </ButtonGroup>
+      <Button
+        text="Dismiss Stack (does nothing)"
+        onPress={() => sheetRef.current?.dismissStack()}
+      />
       <Spacer />
       <Button text="Dismiss" onPress={dismiss} />
 
@@ -136,8 +143,9 @@ export const BasicSheet = forwardRef((props: BasicSheetProps, ref: Ref<TrueSheet
         <DemoContent color={DARK_BLUE} />
         <DemoContent color={DARK_BLUE} />
         <DemoContent color={DARK_BLUE} />
-        <Button text="Dismiss All" onPress={() => TrueSheet.dismissAll()} />
-        <Button text="Dismiss Stack" onPress={() => TrueSheet.dismiss('main')} />
+        {onNavigateToModal && <Button text="Modal" onPress={onNavigateToModal} />}
+        <Button text="Dismiss All" onPress={() => dismissAll()} />
+        <Button text="Dismiss Stack" onPress={() => dismissStack('main')} />
         <Button text="Close" onPress={() => childSheet.current?.dismiss()} />
       </TrueSheet>
     </TrueSheet>

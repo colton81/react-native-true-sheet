@@ -54,7 +54,7 @@ class TrueSheetModule(reactContext: ReactApplicationContext) :
   }
 
   /**
-   * Dismiss a sheet by reference
+   * Dismiss a sheet and all sheets presented on top of it
    *
    * @param viewTag Native view tag of the sheet component
    * @param promise Promise that resolves when sheet is fully dismissed
@@ -68,6 +68,26 @@ class TrueSheetModule(reactContext: ReactApplicationContext) :
 
     withTrueSheetView(tag, promise) { view ->
       view.dismiss(animated) {
+        promise.resolve(null)
+      }
+    }
+  }
+
+  /**
+   * Dismiss only the sheets presented on top of this sheet, keeping this sheet presented
+   *
+   * @param viewTag Native view tag of the sheet component
+   * @param promise Promise that resolves when all child sheets are fully dismissed
+   * @throws VIEW_NOT_FOUND if the view with the given tag is not found
+   * @throws INVALID_VIEW_TYPE if the view is not a TrueSheetView
+   * @throws OPERATION_FAILED if the operation fails for any other reason
+   */
+  @ReactMethod
+  fun dismissStackByRef(viewTag: Double, animated: Boolean, promise: Promise) {
+    val tag = viewTag.toInt()
+
+    withTrueSheetView(tag, promise) { view ->
+      view.dismissStack(animated) {
         promise.resolve(null)
       }
     }
@@ -111,7 +131,7 @@ class TrueSheetModule(reactContext: ReactApplicationContext) :
           return@post
         }
 
-        rootSheet.dismissAll(animated) {
+        rootSheet.dismiss(animated) {
           promise.resolve(null)
         }
       } catch (e: Exception) {

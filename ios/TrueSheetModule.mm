@@ -93,6 +93,30 @@ RCT_EXPORT_MODULE(TrueSheetModule)
   });
 }
 
+- (void)dismissStackByRef:(double)viewTag
+                 animated:(BOOL)animated
+                  resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject {
+  RCTExecuteOnMainQueue(^{
+    TrueSheetView *trueSheetView = [TrueSheetModule getTrueSheetViewByTag:@((NSInteger)viewTag)];
+
+    if (!trueSheetView) {
+      reject(@"SHEET_NOT_FOUND", [NSString stringWithFormat:@"No sheet found with tag %d", (int)viewTag], nil);
+      return;
+    }
+
+    [trueSheetView
+      dismissStackAnimated:animated
+                completion:^(BOOL success, NSError *_Nullable error) {
+                  if (success) {
+                    resolve(nil);
+                  } else {
+                    reject(@"DISMISS_FAILED", error.localizedDescription ?: @"Failed to dismiss stack", error);
+                  }
+                }];
+  });
+}
+
 - (void)resizeByRef:(double)viewTag
               index:(double)index
             resolve:(RCTPromiseResolveBlock)resolve
@@ -141,15 +165,15 @@ RCT_EXPORT_MODULE(TrueSheetModule)
         return;
       }
 
-      [rootSheet
-        dismissAllAnimated:animated
-                completion:^(BOOL success, NSError *_Nullable error) {
-                  if (success) {
-                    resolve(nil);
-                  } else {
-                    reject(@"DISMISS_FAILED", error.localizedDescription ?: @"Failed to dismiss sheets", error);
-                  }
-                }];
+      [rootSheet emitDismissedPosition];
+      [rootSheet dismissAnimated:animated
+                      completion:^(BOOL success, NSError *_Nullable error) {
+                        if (success) {
+                          resolve(nil);
+                        } else {
+                          reject(@"DISMISS_FAILED", error.localizedDescription ?: @"Failed to dismiss sheets", error);
+                        }
+                      }];
     }
   });
 }

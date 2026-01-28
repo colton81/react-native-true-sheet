@@ -93,7 +93,13 @@ using namespace facebook::react;
     return;
   }
 
-  // Already set up with same inset
+  // Check if pinned scroll view is still valid (still in view hierarchy)
+  // This handles the case where content changes and the old scroll view is unmounted
+  if (_pinnedScrollView && ![_pinnedScrollView isDescendantOfView:self]) {
+    [self clearScrollable];
+  }
+
+  // Already set up with same inset and valid scroll view
   if (_pinnedScrollView && _bottomInset == bottomInset) {
     return;
   }
@@ -138,9 +144,15 @@ using namespace facebook::react;
   CGFloat newHeight = containerView.bounds.size.height - scrollViewFrameInContainer.origin.y;
 
   if (newHeight > 0) {
+    // Preserve contentOffset before changing frame to prevent scroll jump
+    CGPoint savedContentOffset = _pinnedScrollView.scrollView.contentOffset;
+
     CGRect frame = _pinnedScrollView.frame;
     frame.size.height = newHeight;
     _pinnedScrollView.frame = frame;
+
+    // Restore contentOffset after frame change
+    _pinnedScrollView.scrollView.contentOffset = savedContentOffset;
   }
 }
 
